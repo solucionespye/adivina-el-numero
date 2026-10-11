@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Adivina el número</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Figtree:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eef6e0;
+    --surface: #fbfdf4;
+    --ink: #000000;
+    --muted: #000000;
+    --line: #c9dcb0;
+    --alive: #ffd23f;
+    --low: #237a37;
+    --high: #a86400;
+    --win: #5b7300;
+    --num: #000000;
+    --display: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+    --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --num: #eef7d8;
+      --bg: #10200f; --surface: #182b17; --ink: #eef7d8; --muted: #a3b58f;
+      --line: #2f4a2d; --alive: #ffd23f; --low: #5fd07a; --high: #ffc24a; --win: #d9f56a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --num: #eef7d8;
+    --bg: #10200f; --surface: #182b17; --ink: #eef7d8; --muted: #a3b58f;
+    --line: #2f4a2d; --alive: #ffd23f; --low: #5fd07a; --high: #ffc24a; --win: #d9f56a;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.5;
+    display: flex;
+    justify-content: center;
+    padding: 28px 18px 48px;
+  }
+  main { width: 100%; max-width: 560px; }
+
+  h1 {
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: clamp(2.2rem, 8vw, 3.1rem);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin: 0 0 8px;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; margin: 0 0 8px; }
+  .brand h1 { margin: 0; }
+  .brand svg { flex: none; width: 76px; height: 76px; }
+  .lead { color: var(--muted); margin: 0 0 22px; }
+
+  /* Elección de nivel y modo */
+  .controls { display: grid; gap: 14px; margin: 0 0 28px; }
+  .glabel { display: block; font-weight: 600; margin-bottom: 6px; }
+  .opts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .opt {
+    min-height: 48px;
+    padding: 0 16px;
+    font: 600 1rem var(--body);
+    background: #ffffff;
+    color: #000000;
+    border: 2px solid #000000;
+    border-radius: 12px;
+    cursor: pointer;
+  }
+  .opt[aria-pressed="true"] { background: #000000; color: #ffffff; border-color: #000000; }
+
+  /* Recta numérica */
+  .range-readout {
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: clamp(2.6rem, 11vw, 4rem);
+    letter-spacing: -0.03em;
+    line-height: 1;
+    margin: 0 0 4px;
+    color: var(--num);
+    font-variant-numeric: tabular-nums;
+  }
+  .range-readout span { color: var(--num); font-weight: 500; font-size: 0.45em; letter-spacing: 0; padding: 0 0.15em; }
+  .range-caption { color: var(--muted); margin: 0 0 18px; font-size: 0.95rem; }
+
+  .slots { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 20px; }
+  .slot {
+    min-width: 64px; height: 56px; padding: 0 14px;
+    display: grid; place-items: center;
+    border: 2px dashed var(--line);
+    border-radius: 12px;
+    font: 800 1.5rem var(--display);
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+  }
+  .slot.found {
+    border: 2px solid var(--win);
+    color: var(--ink);
+    background: color-mix(in srgb, var(--win) 14%, transparent);
+  }
+
+  .line { position: relative; height: 64px; margin: 0 4px 30px; }
+  .line .track {
+    position: absolute; left: 0; right: 0; top: 22px; height: 20px;
+    background: #ffffff;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .line .alive {
+    position: absolute; top: 0; bottom: 0;
+    background: #8ee58f;
+    transition: left .45s cubic-bezier(.2,.8,.2,1), width .45s cubic-bezier(.2,.8,.2,1);
+  }
+  .line .end {
+    position: absolute; top: 48px;
+    font-size: 0.8rem; color: var(--num);
+    font-variant-numeric: tabular-nums;
+  }
+  .line .end.left { left: 0; }
+  .line .end.right { right: 0; }
+  .mark {
+    position: absolute; top: 12px;
+    width: 3px; height: 40px;
+    transform: translateX(-50%);
+    border-radius: 2px;
+  }
+  .mark.low { background: var(--low); }
+  .mark.high { background: #e02424; }
+  .mark.mid { background: var(--ink); }
+  .mark.win { background: var(--win); width: 5px; }
+  .mark b {
+    position: absolute; left: 50%; top: -20px; transform: translateX(-50%);
+    font-size: 0.78rem; font-weight: 600; font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .mark b { color: var(--ink); }
+
+  /* Entrada */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 20px;
+  }
+  .row { display: flex; gap: 10px; }
+  label { display: block; font-weight: 600; margin-bottom: 8px; }
+  input[type="number"] {
+    flex: 1; min-width: 0;
+    font: 800 2rem/1 var(--display);
+    font-variant-numeric: tabular-nums;
+    padding: 12px 16px;
+    color: var(--ink);
+    background: var(--bg);
+    border: 2px solid var(--line);
+    border-radius: 12px;
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .main-btn {
+    font: 600 1.05rem var(--body);
+    padding: 0 22px;
+    border-radius: 12px;
+    border: 2px solid #000000;
+    background: #ffffff;
+    color: #000000;
+    cursor: pointer;
+    min-height: 56px;
+  }
+  .main-btn:disabled { opacity: .45; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid var(--low); outline-offset: 2px; }
+
+  .feedback { min-height: 3.2em; margin: 16px 0 0; font-size: 1.15rem; font-weight: 600; }
+  .feedback.low, .feedback.high, .feedback.win { color: var(--ink); }
+  .feedback small { display: block; color: var(--muted); font-weight: 400; font-size: 0.9rem; }
+
+  .meta { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 0.95rem; margin: 22px 2px 10px; }
+  .history { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .history li {
+    border: 1.5px solid currentColor;
+    border-radius: 999px;
+    padding: 3px 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.95rem;
+  }
+  .history li.low { border-color: var(--low); }
+  .history li.high { border-color: var(--high); }
+  .history li.mid { border-color: var(--ink); }
+  .history li.win { border-color: var(--win); background: color-mix(in srgb, var(--win) 14%, transparent); }
+  .again { margin-top: 18px; }
+  .hidden { display: none !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .line .alive { transition: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">
+    <svg viewBox="0 0 96 96" role="img" aria-label="Logo de Adivina el número" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="3" width="90" height="90" rx="24" fill="#1b3a1f" stroke="#8ee58f" stroke-width="3"/>
+      <text x="48" y="56" text-anchor="middle" font-family="Bricolage Grotesque, Trebuchet MS, system-ui, sans-serif" font-weight="800" font-size="58" fill="#ffffff">?</text>
+      <rect x="16" y="68" width="64" height="9" rx="4.5" fill="#ffffff"/>
+      <rect x="34" y="68" width="30" height="9" rx="4.5" fill="#8ee58f"/>
+      <rect x="58" y="62" width="5" height="21" rx="2.5" fill="#e02424"/>
+    </svg>
+    <h1>Adivina el número</h1>
+  </div>
+  <p class="lead" id="lead"></p>
+
+  <div class="controls">
+    <div role="group" aria-labelledby="lv-label">
+      <span class="glabel" id="lv-label">Nivel</span>
+      <div class="opts" id="levels">
+        <button type="button" class="opt" data-max="10" aria-pressed="false">Fácil (1 a 10)</button>
+        <button type="button" class="opt" data-max="100" aria-pressed="true">Medio (1 a 100)</button>
+        <button type="button" class="opt" data-max="1000" aria-pressed="false">Difícil (1 a 1000)</button>
+      </div>
+    </div>
+    <div role="group" aria-labelledby="md-label">
+      <span class="glabel" id="md-label">Cuántos números</span>
+      <div class="opts" id="modes">
+        <button type="button" class="opt" data-count="1" aria-pressed="true">Uno</button>
+        <button type="button" class="opt" data-count="2" aria-pressed="false">Dos</button>
+        <button type="button" class="opt" data-count="3" aria-pressed="false">Tres</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="range-readout" id="readout" aria-hidden="true"></div>
+  <p class="range-caption" id="caption"></p>
+  <div class="slots hidden" id="slots" aria-hidden="true"></div>
+
+  <div class="line" id="line" aria-hidden="true">
+    <div class="track"><div class="alive" id="alive"></div></div>
+    <div id="marks"></div>
+    <span class="end left">1</span>
+    <span class="end right" id="endRight">100</span>
+  </div>
+
+  <div class="panel">
+    <form id="form" novalidate>
+      <label for="guess">Tu número</label>
+      <div class="row">
+        <input id="guess" type="number" inputmode="numeric" min="1" max="100" step="1" autocomplete="off" placeholder="50">
+        <button type="submit" class="main-btn" id="go">Probar</button>
+      </div>
+    </form>
+    <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
+    <div class="again hidden" id="again">
+      <button type="button" class="main-btn" id="restart">Jugar otra vez</button>
+    </div>
+  </div>
+
+  <div class="meta">
+    <span id="attempts">Intentos: 0</span>
+    <span id="best"></span>
+  </div>
+  <ul class="history" id="history" aria-label="Números que has probado"></ul>
+</main>
+
+<script>
+(function () {
+  var MIN = 1, MAX = 100, COUNT = 1;
+  var secrets, found, low, high, tries, over;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var form = $('form'), input = $('guess'), go = $('go');
+  var feedback = $('feedback'), historyEl = $('history'), marks = $('marks'), slots = $('slots');
+
+  function pct(n) { return ((n - MIN) / (MAX - MIN)) * 100; }
+  function plural(n, one, many) { return n === 1 ? one : many; }
+
+  function bestKey() { return 'adivina-mejor-' + COUNT + '-' + MAX; }
+  function loadBest() {
+    try { var v = parseInt(localStorage.getItem(bestKey()), 10); return isNaN(v) ? null : v; }
+    catch (e) { return null; }
+  }
+  function saveBest(v) { try { localStorage.setItem(bestKey(), String(v)); } catch (e) {} }
+  function renderBest() {
+    var b = loadBest();
+    $('best').textContent = b ? 'Mejor marca: ' + b + plural(b, ' intento', ' intentos') : '';
+  }
+
+  function renderLead() {
+    $('lead').textContent = COUNT === 1
+      ? 'Estoy pensando en un número del 1 al ' + MAX + '. Prueba con uno y te diré si el mío es más alto o más bajo.'
+      : 'Estoy pensando en ' + (COUNT === 2 ? 'dos' : 'tres') + ' números distintos del 1 al ' + MAX + '. Prueba con uno y te diré cuántos de los que faltan son más altos y cuántos más bajos.';
+  }
+
+  function renderSlots() {
+    slots.innerHTML = '';
+    for (var i = 0; i < COUNT; i++) {
+      var d = document.createElement('div');
+      d.className = 'slot' + (found[i] !== undefined ? ' found' : '');
+      d.textContent = found[i] !== undefined ? found[i] : '?';
+      slots.appendChild(d);
+    }
+  }
+
+  function renderRange() {
+    var alive = $('alive');
+    if (COUNT === 1) {
+      var count = high - low + 1;
+      $('readout').innerHTML = low + '<span>a</span>' + high;
+      var left = pct(low), right = pct(high);
+      alive.style.display = '';
+      alive.style.left = left + '%';
+      alive.style.width = Math.max(right - left, 1.2) + '%';
+      if (over) $('caption').textContent = 'Lo encontraste.';
+      else if (count === 1) $('caption').textContent = 'Solo queda un número posible.';
+      else $('caption').textContent = 'Quedan ' + count + ' números posibles.';
+    } else {
+      $('readout').innerHTML = MIN + '<span>a</span>' + MAX;
+      alive.style.display = 'none';
+      var left3 = COUNT - found.length;
+      $('caption').textContent = over
+        ? 'Los encontraste todos.'
+        : 'Faltan ' + left3 + plural(left3, ' número por encontrar.', ' números por encontrar.');
+      renderSlots();
+    }
+  }
+
+  function addMark(n, kind) {
+    var m = document.createElement('div');
+    m.className = 'mark ' + kind;
+    m.style.left = pct(n) + '%';
+    var b = document.createElement('b');
+    b.textContent = n;
+    m.appendChild(b);
+    marks.appendChild(m);
+  }
+
+  function addChip(n, kind, text) {
+    var li = document.createElement('li');
+    li.className = kind;
+    li.textContent = n + ' · ' + text;
+    historyEl.appendChild(li);
+  }
+
+  function say(text, kind, small) {
+    feedback.className = 'feedback ' + (kind || '');
+    feedback.textContent = text;
+    if (small) {
+      var s = document.createElement('small');
+      s.textContent = small;
+      feedback.appendChild(s);
+    }
+  }
+
+  function pickSecrets() {
+    var list = [];
+    while (list.length < COUNT) {
+      var s = Math.floor(Math.random() * (MAX - MIN + 1)) + MIN;
+      if (list.indexOf(s) === -1) list.push(s);
+    }
+    return list;
+  }
+
+  // Cuántos de los que faltan son más altos o más bajos que n
+  function counts(n) {
+    var rem = secrets.filter(function (s) { return found.indexOf(s) === -1; });
+    var h = rem.filter(function (s) { return s > n; }).length;
+    return { h: h, l: rem.length - h, r: rem.length };
+  }
+  function hintText(c) {
+    if (c.l === 0) {
+      return c.r === 1 ? 'El que falta es más alto.' : 'Los ' + c.r + ' que faltan son más altos.';
+    }
+    if (c.h === 0) {
+      return c.r === 1 ? 'El que falta es más bajo.' : 'Los ' + c.r + ' que faltan son más bajos.';
+    }
+    return 'De los que faltan, ' + c.h + plural(c.h, ' es más alto', ' son más altos') +
+           ' y ' + c.l + plural(c.l, ' es más bajo', ' son más bajos') + '.';
+  }
+  function shortHint(c) {
+    return c.h + plural(c.h, ' más alto', ' más altos') + ', ' + c.l + plural(c.l, ' más bajo', ' más bajos');
+  }
+
+  function newGame() {
+    secrets = pickSecrets();
+    found = [];
+    low = MIN; high = MAX; tries = 0; over = false;
+    marks.innerHTML = '';
+    historyEl.innerHTML = '';
+    $('attempts').textContent = 'Intentos: 0';
+    $('again').classList.add('hidden');
+    slots.classList.toggle('hidden', COUNT === 1);
+    $('endRight').textContent = MAX;
+    input.max = MAX;
+    input.placeholder = Math.round((MIN + MAX) / 2);
+    input.disabled = false; go.disabled = false;
+    input.value = '';
+    say('', '');
+    renderLead();
+    renderRange();
+    renderBest();
+    input.focus();
+  }
+
+  function finish(winText) {
+    over = true;
+    var b = loadBest();
+    var extra = '';
+    if (!b || tries < b) { saveBest(tries); extra = b ? 'Nueva mejor marca.' : 'Primera marca guardada.'; }
+    renderRange();
+    say(winText, 'win', extra);
+    renderBest();
+    input.disabled = true; go.disabled = true;
+    $('again').classList.remove('hidden');
+    $('restart').focus();
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (over) return;
+    var raw = input.value.trim();
+    var n = Number(raw);
+    if (raw === '' || !Number.isInteger(n) || n < MIN || n > MAX) {
+      say('Escribe un número entero del ' + MIN + ' al ' + MAX + '.', 'high');
+      input.focus(); input.select();
+      return;
+    }
+
+    /* ---------- Modo de un número ---------- */
+    if (COUNT === 1) {
+      var secret = secrets[0];
+      var alreadyRuledOut = n < low || n > high;
+      tries++;
+      $('attempts').textContent = 'Intentos: ' + tries;
+
+      if (n === secret) {
+        low = high = n;
+        addMark(n, 'win');
+        addChip(n, 'win', '¡es este!');
+        finish('¡Correcto! Era el ' + n + '. Lo has encontrado en ' + tries + plural(tries, ' intento.', ' intentos.'));
+        return;
+      }
+      var kind, text;
+      if (n < secret) {
+        kind = 'low'; text = 'Más alto que ' + n + '.';
+        if (n + 1 > low) low = n + 1;
+      } else {
+        kind = 'high'; text = 'Más bajo que ' + n + '.';
+        if (n - 1 < high) high = n - 1;
+      }
+      addMark(n, kind);
+      addChip(n, kind, kind === 'low' ? 'más alto' : 'más bajo');
+      renderRange();
+      say(text, kind, alreadyRuledOut ? 'Ese número ya estaba descartado.' : '');
+      input.value = '';
+      input.focus();
+      return;
+    }
+
+    /* ---------- Modo de tres números ---------- */
+    if (found.indexOf(n) !== -1) {
+      say('El ' + n + ' ya lo encontraste. Prueba con otro.', 'high');
+      input.focus(); input.select();
+      return;
+    }
+    tries++;
+    $('attempts').textContent = 'Intentos: ' + tries;
+
+    if (secrets.indexOf(n) !== -1) {
+      found.push(n);
+      addMark(n, 'win');
+      addChip(n, 'win', '¡es uno de ellos!');
+      if (found.length === COUNT) {
+        var sorted = secrets.slice().sort(function (a, b) { return a - b; });
+        finish('¡Los encontraste todos! Eran el ' + sorted.slice(0, -1).join(', el ') + ' y el ' + sorted[sorted.length - 1] +
+               '. Lo has logrado en ' + tries + plural(tries, ' intento.', ' intentos.'));
+        return;
+      }
+      renderRange();
+      say('¡Has encontrado el ' + n + '! Faltan ' + (COUNT - found.length) + '.', 'win', hintText(counts(n)));
+    } else {
+      var c = counts(n);
+      addMark(n, 'mid');
+      addChip(n, 'mid', shortHint(c));
+      renderRange();
+      say(hintText(c), c.l === 0 ? 'low' : c.h === 0 ? 'high' : '');
+    }
+    input.value = '';
+    input.focus();
+  });
+
+  $('levels').addEventListener('click', function (e) {
+    var b = e.target.closest('.opt');
+    if (!b) return;
+    MAX = parseInt(b.getAttribute('data-max'), 10);
+    Array.prototype.forEach.call($('levels').children, function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    newGame();
+  });
+  $('modes').addEventListener('click', function (e) {
+    var b = e.target.closest('.opt');
+    if (!b) return;
+    COUNT = parseInt(b.getAttribute('data-count'), 10);
+    Array.prototype.forEach.call($('modes').children, function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    newGame();
+  });
+  $('restart').addEventListener('click', newGame);
+  newGame();
+})();
+</script>
+</body>
+</html>
